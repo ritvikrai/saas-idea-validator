@@ -1,41 +1,60 @@
 'use client'
 
-import { useState } from 'react'
-import { Lightbulb, TrendingUp, Users, DollarSign, Target, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Lightbulb, TrendingUp, Users, DollarSign, Target, Loader2, CheckCircle, XCircle, AlertCircle, History } from 'lucide-react'
 
 export default function Home() {
   const [idea, setIdea] = useState('')
   const [validating, setValidating] = useState(false)
   const [result, setResult] = useState(null)
+  const [history, setHistory] = useState([])
+  const [showHistory, setShowHistory] = useState(false)
+
+  useEffect(() => {
+    fetchHistory()
+  }, [])
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/validations')
+      const data = await res.json()
+      if (data.validations) {
+        setHistory(data.validations)
+      }
+    } catch (e) {
+      console.error('Failed to fetch history:', e)
+    }
+  }
 
   const validateIdea = async () => {
-    if (!idea.trim()) return
+    if (!idea.trim() || idea.length < 20) {
+      alert('Please describe your idea in more detail (at least 20 characters)')
+      return
+    }
     setValidating(true)
     setResult(null)
     
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    const score = Math.floor(Math.random() * 40) + 60
-    setResult({
-      overallScore: score,
-      marketSize: { score: Math.floor(Math.random() * 100), label: ['$1B+', '$500M-$1B', '$100M-$500M', '$50M-$100M'][Math.floor(Math.random() * 4)] },
-      competition: { score: Math.floor(Math.random() * 100), competitors: Math.floor(Math.random() * 20) + 3 },
-      demand: { score: Math.floor(Math.random() * 100), searches: Math.floor(Math.random() * 50000) + 1000 },
-      monetization: { score: Math.floor(Math.random() * 100), models: ['Subscription', 'Freemium', 'Usage-based', 'Enterprise'] },
-      suggestions: [
-        'Consider focusing on a specific niche within this market',
-        'Add AI-powered features to differentiate from competitors',
-        'Build integrations with popular tools like Slack, Notion',
-        'Start with a strong content marketing strategy',
-        'Consider a product-led growth approach'
-      ].sort(() => Math.random() - 0.5).slice(0, 3),
-      risks: [
-        'Established players may copy your features quickly',
-        'Customer acquisition costs could be high initially',
-        'Market may be saturated in certain segments'
-      ].sort(() => Math.random() - 0.5).slice(0, 2)
-    })
-    setValidating(false)
+    try {
+      const res = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea })
+      })
+      
+      const data = await res.json()
+      
+      if (data.success && data.validation) {
+        setResult(data.validation.result)
+        fetchHistory()
+      } else {
+        alert(data.error || 'Failed to validate idea')
+      }
+    } catch (e) {
+      console.error('Validation error:', e)
+      alert('Failed to validate idea. Please try again.')
+    } finally {
+      setValidating(false)
+    }
   }
 
   const getScoreColor = (score) => {
@@ -89,7 +108,7 @@ export default function Home() {
                   <TrendingUp className="text-violet-500" />
                   <span className="font-medium">Market Size</span>
                 </div>
-                <p className={`text-3xl font-bold ${getScoreColor(result.marketSize.score)}`}>{result.marketSize.label}</p>
+                <p className={`text-3xl font-bold ${getScoreColor(result.marketAnalysis?.score || 70)}`}>{result.marketAnalysis?.size || 'N/A'}</p>
                 <p className="text-sm text-gray-500">TAM Estimate</p>
               </div>
 
@@ -98,7 +117,7 @@ export default function Home() {
                   <Users className="text-violet-500" />
                   <span className="font-medium">Competition</span>
                 </div>
-                <p className={`text-3xl font-bold ${getScoreColor(100 - result.competition.competitors * 3)}`}>{result.competition.competitors}</p>
+                <p className={`text-3xl font-bold ${getScoreColor(result.competition?.score || 70)}`}>{result.competition?.directCompetitors?.length || 0}</p>
                 <p className="text-sm text-gray-500">Direct Competitors</p>
               </div>
 
@@ -107,7 +126,7 @@ export default function Home() {
                   <Target className="text-violet-500" />
                   <span className="font-medium">Search Demand</span>
                 </div>
-                <p className={`text-3xl font-bold ${getScoreColor(result.demand.score)}`}>{result.demand.searches.toLocaleString()}</p>
+                <p className={`text-3xl font-bold ${getScoreColor(result.demand?.score || 70)}`}>{(result.demand?.estimatedSearchVolume || 0).toLocaleString()}</p>
                 <p className="text-sm text-gray-500">Monthly Searches</p>
               </div>
 
@@ -117,7 +136,7 @@ export default function Home() {
                   <span className="font-medium">Monetization</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {result.monetization.models.slice(0, 2).map((m, i) => (
+                  {(result.monetization?.recommendedModels || []).slice(0, 2).map((m, i) => (
                     <span key={i} className="px-2 py-1 bg-violet-100 text-violet-700 rounded text-xs">{m}</span>
                   ))}
                 </div>
